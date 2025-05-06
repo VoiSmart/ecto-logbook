@@ -1,15 +1,15 @@
 defmodule Ecto.DevLogger.MixProject do
   use Mix.Project
-  @version "0.14.1"
-  @source_url "https://github.com/fuelen/ecto_dev_logger"
+  @version "1.14.1"
+  @source_url "https://github.com/VoiSmart/ecto-logbook"
 
   def project do
     [
       app: :ecto_dev_logger,
       version: @version,
-      elixir: "~> 1.10",
+      elixir: "~> 1.17",
       start_permanent: Mix.env() == :prod,
-      description: "An alternative Ecto logger for development",
+      description: "An alternative logger for Ecto queries using Logbook",
       package: package(),
       deps: deps(),
       docs: [
@@ -26,9 +26,7 @@ defmodule Ecto.DevLogger.MixProject do
   defp package do
     [
       licenses: ["Apache-2.0"],
-      links: %{
-        GitHub: @source_url
-      }
+      links: %{GitHub: @source_url}
     ]
   end
 
@@ -42,10 +40,13 @@ defmodule Ecto.DevLogger.MixProject do
     [
       {:ecto, "~> 3.7"},
       {:jason, "~> 1.0"},
-      {:ex_doc, "~> 0.28", only: :dev, runtime: false},
+      {:geo, "~> 3.5 or ~> 4.0", optional: true},
       {:ecto_sql, "~> 3.7", only: :test},
       {:postgrex, "~> 0.17", only: :test},
-      {:geo, "~> 3.5 or ~> 4.0", optional: true}
+      {:excoveralls, "~> 0.15", only: :test},
+      {:credo, "~> 1.7", only: [:dev, :test]},
+      {:ex_doc, "~> 0.28", only: [:dev, :test], runtime: false},
+      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false}
     ]
   end
 end

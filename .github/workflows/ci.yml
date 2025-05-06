@@ -1,0 +1,22 @@
+on: [push, pull_request]
+jobs:
+  test:
+    name: Test on Elixir ${{matrix.elixir}} (OTP ${{matrix.otp}})
+    runs-on: ubuntu-24.04
+    env:
+      MIX_ENV: "test"
+    strategy:
+      matrix:
+        otp: ["26", "27"]
+        elixir: ["1.17.3", "1.18.3"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: ${{matrix.otp}}
+          elixir-version: ${{matrix.elixir}}
+      - run: mix deps.get
+      - run: mix format --check-formatted --dry-run
+      # - run: mix credo --strict"
+      - run: mix dialyzer
+      - run: mix test
