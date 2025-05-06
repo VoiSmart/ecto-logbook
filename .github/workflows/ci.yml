@@ -16,6 +16,7 @@ jobs:
           otp-version: ${{matrix.otp}}
           elixir-version: ${{matrix.elixir}}
       - run: mix deps.get
+      - run: mix deps.compile --only test
       - run: mix format --check-formatted --dry-run
       # - run: mix credo --strict"
       - run: mix dialyzer

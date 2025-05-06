@@ -37,32 +37,11 @@ defprotocol Ecto.DevLogger.PrintableParameter do
   def to_string_literal(term)
 end
 
-defmodule Ecto.DevLogger.Utils do
-  @moduledoc false
-  def in_string_quotes(string) do
-    "'#{String.replace(string, "'", "''")}'"
-  end
-
-  def all_to_string_literal(list) do
-    result =
-      Enum.reduce_while(list, {:ok, []}, fn element, {:ok, acc} ->
-        case Ecto.DevLogger.PrintableParameter.to_string_literal(element) do
-          nil -> {:halt, :error}
-          string_literal -> {:cont, {:ok, [{element, string_literal} | acc]}}
-        end
-      end)
-
-    with {:ok, list} <- result do
-      {:ok, Enum.reverse(list)}
-    end
-  end
-end
-
 defimpl Ecto.DevLogger.PrintableParameter, for: Atom do
   def to_expression(nil), do: "NULL"
   def to_expression(true), do: "true"
   def to_expression(false), do: "false"
-  def to_expression(atom), do: atom |> Atom.to_string() |> Ecto.DevLogger.Utils.in_string_quotes()
+  def to_expression(atom), do: Ecto.DevLogger.Utils.in_string_quotes("#{atom}")
 
   def to_string_literal(nil), do: "NULL"
   def to_string_literal(true), do: "true"
@@ -121,26 +100,23 @@ defimpl Ecto.DevLogger.PrintableParameter, for: Tuple do
 
       {:ok, list} ->
         body =
-          Enum.map_join(list, ",", fn {element, string_literal} ->
-            case element do
-              nil ->
-                ""
-
-              "" ->
-                ~s|""|
-
-              _ ->
-                string = String.replace(string_literal, "\"", "\\\"")
-
-                if String.contains?(string, [",", "(", ")"]) do
-                  ~s|"#{string}"|
-                else
-                  string
-                end
-            end
+          Enum.map_join(list, ",", fn
+            {nil, _literal} -> nil
+            {"", _literal} -> ~s|""|
+            {_, literal} -> escape_literal(literal)
           end)
 
         "(" <> body <> ")"
+    end
+  end
+
+  defp escape_literal(literal) do
+    string = String.replace(literal, "\"", "\\\"")
+
+    if String.contains?(string, [",", "(", ")"]) do
+      ~s|"#{string}"|
+    else
+      string
     end
   end
 end
@@ -229,50 +205,33 @@ defimpl Ecto.DevLogger.PrintableParameter, for: List do
   end
 
   def to_string_literal(list) do
-    case Ecto.DevLogger.Utils.all_to_string_literal(list) do
-      :error ->
+    case {list, Ecto.DevLogger.Utils.all_to_string_literal(list)} do
+      {_, :error} ->
         nil
 
-      {:ok, elements_with_string_literals} ->
-        if tsvector?(list) do
-          Enum.map_join(elements_with_string_literals, " ", fn {_element, string_literal} ->
-            string_literal
+      {[%{__struct__: Postgrex.Lexeme} | _], {:ok, elements_with_literals}} ->
+        Enum.map_join(elements_with_literals, " ", fn {_el, literal} -> literal end)
+
+      {_, {:ok, elements_with_literals}} ->
+        body =
+          Enum.map_join(elements_with_literals, ",", fn
+            {element, literal} when is_list(element) or is_nil(element) -> literal
+            {"", _literal} -> ~s|""|
+            {_element, literal} -> escape_literal(literal)
           end)
-        else
-          body =
-            Enum.map_join(elements_with_string_literals, ",", fn {element, string_literal} ->
-              cond do
-                is_list(element) or is_nil(element) ->
-                  string_literal
 
-                element == "" ->
-                  ~s|""|
-
-                true ->
-                  string = String.replace(string_literal, "\"", "\\\"")
-
-                  if String.downcase(string) == "null" or
-                       String.contains?(string, [",", "{", "}"]) do
-                    ~s|"#{string}"|
-                  else
-                    string
-                  end
-              end
-            end)
-
-          "{" <> body <> "}"
-        end
+        "{" <> body <> "}"
     end
   end
 
-  # tsvector is a list of lexemes.
-  # By checking only the first element we assume that the others are also lexemes.
-  defp tsvector?([%{__struct__: Postgrex.Lexeme} | _]) do
-    true
-  end
+  defp escape_literal(literal) do
+    string = String.replace(literal, "\"", "\\\"")
 
-  defp tsvector?(_list) do
-    false
+    cond do
+      String.downcase(string) == "null" -> ~s|"#{string}"|
+      String.contains?(string, [",", "{", "}"]) -> ~s|"#{string}"|
+      true -> string
+    end
   end
 end
 
@@ -329,7 +288,7 @@ end
 if Code.ensure_loaded?(Postgrex.Lexeme) do
   defimpl Ecto.DevLogger.PrintableParameter, for: Postgrex.Lexeme do
     def to_expression(lexeme) do
-      raise "Invalid parameter: #{lexeme} must be inside a list"
+      raise "Invalid parameter: #{inspect(lexeme)} must be inside a list"
     end
 
     def to_string_literal(lexeme) do
@@ -346,12 +305,10 @@ if Code.ensure_loaded?(Postgrex.Lexeme) do
 
         positions ->
           positions =
-            Enum.map_join(positions, ",", fn {position, weight} ->
-              if weight in [nil, :D] do
-                Integer.to_string(position)
-              else
-                [Integer.to_string(position), Atom.to_string(weight)]
-              end
+            Enum.map_join(positions, ",", fn
+              {position, nil} -> Integer.to_string(position)
+              {position, :D} -> Integer.to_string(position)
+              {position, weight} -> [Integer.to_string(position), Atom.to_string(weight)]
             end)
 
           "#{word}:#{positions}"
