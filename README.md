@@ -1,106 +1,99 @@
 # EctoLogbook
 
-[![Hex.pm](https://img.shields.io/hexpm/v/ecto_dev_logger.svg)](https://hex.pm/packages/ecto_dev_logger)
+An alternative logger for Ecto queries that uses [Logbook](https://hex.pm/packages/logbook).
 
-An alternative logger for Ecto queries.
+This package aims at making Ecto logs readable when used with a logfmt formatter.
 
-It inlines bindings into the query, so it is easy to copy-paste logged SQL and run it in any IDE for debugging without
-manual transformation of common elixir terms to string representation (binary UUID, DateTime, Decimal, json, etc).
-Also, it highlights db time to make slow queries noticeable. Source table and inlined bindings are highlighted as well.
+Read the docs at [https://voismart.github.io/ecto-logbook/](https://voismart.github.io/ecto-logbook/).
 
-![before and after](./assets/screenshot.png)
+Features:
+
+- Uses log metadata that can be parsed if using a logfmt/json formatter.
+- Uses [Logbook](https://hex.pm/packages/logbook) for logging, making it easy to enable/disable logging
+- With `:colorize` option, Highlights db time for slow queries
+- With `:inline_params` option, tries to inline parameters into the query
+- If repo `:stacktrace` is enabled, MFA information will be included in the log metadata
+
+The base of this project is a fork of https://github.com/fuelen/ecto_dev_logger
+Differently from the original project, this package doesn't try hard to print valid queries.
+Instead it just aims for readability of the logs.
 
 ## Installation
 
-The package can be installed by adding `ecto_dev_logger` to your list of dependencies in `mix.exs`:
+The package can be installed by adding `ecto_logbook` to your list of dependencies in `mix.exs`:
 
 ```elixir
 def deps do
   [
-    {:ecto_dev_logger, "~> 0.14"}
+    {:ecto_logbook, git: "git@github.com:voismart/ecto_logbook.git", tag: "v1.14.1"}
   ]
 end
 ```
 
-Then disable default logger for your repo in config file for dev mode:
+## Configuration
+
+Configure your logger in `config.exs`:
 
 ```elixir
-if config_env() == :dev do
-  config :my_app, MyApp.Repo, log: false
-end
+import Config
+
+# EctoLogbook will log at debug level
+config :logger, :level, :debug
+config :logbook, :default_tag_level, :debug
+
+# Use a logfmt formatter and display all metadata
+config :logger, :default_formatter, format: {Logbook.Formatters.Logfmt, :format}, metadata: :all
 ```
 
-And install telemetry handler in `MyApp.Application`:
+In order to use EctoLogbook, you should disable youe Repo default logs.
+
+```elixir
+config :my_app, MyApp.Repo, log: false
+```
+
+Then install telemetry handler in `MyApp.Application`:
 
 ```elixir
 EctoLogbook.install(MyApp.Repo)
 ```
 
-Telemetry handler will be installed _only_ if `log` configuration value is set to `false`.
-
-That's it.
-
-The docs can be found at [https://hexdocs.pm/ecto_dev_logger](https://hexdocs.pm/ecto_dev_logger).
-
-### Development Only Installation
-
-If you turn off repo logging for any reason in production, you can configure `ecto_dev_logger` to _only_ be available
-in development. In your `mix.exs`, restrict the installation to `:dev`:
-
-```elixir
-def deps do
-  [
-    {:ecto_dev_logger, "~> 0.10", only: :dev}
-  ]
-end
+```diff
+- Telemetry handler will be installed _only_ if `log` configuration value is set to `false`.
 ```
 
-In `MyApp.Application`, an additional function is required:
+You can then finetune the logging level for EctoLogbook using `Logbook.set_level/2`:
 
 ```elixir
-defmodule MyApp.Application do
-  @moduledoc "..."
+# Disable logging for EctoLogbook
+Logbook.set_level(:ecto_logbook, :none)
 
-  def start(_type, _args) do
-    maybe_install_ecto_dev_logger()
-
-    # ...
-  end
-
-  if Code.ensure_loaded?(EctoLogbook) do
-    defp maybe_install_ecto_dev_logger, do: EctoLogbook.install(MyApp.Repo)
-  else
-    defp maybe_install_ecto_dev_logger, do: :ok
-  end
-
-  # ...
-end
+# Enable logging for EctoLogbook
+Logbook.set_level(:ecto_logbook, :debug)
 ```
 
-### Format queries
+For more configuration options, see [Logbook](https://hexdocs.pm/logbook/Logbook.html).
 
-It is possible to format queries using a `:before_inline_callback` option.
-Here is an example of setup using [pgFormatter](https://github.com/darold/pgFormatter) as an external utility:
+### Display Options
+
+By default EctoLogbook will try to do as little transformation as possible to make logging fast.
+You can pass options to `EctoLogbook.install/2` to fine tune the display behavior:
 
 ```elixir
-defmodule MyApp.Application do
-  def start(_type, _args) do
-    EctoLogbook.install(MyApp.Repo, before_inline_callback: &__MODULE__.format_sql_query/1)
-  end
-
-  def format_sql_query(query) do
-    case System.shell("echo $SQL_QUERY | pg_format -", env: [{"SQL_QUERY", query}], stderr_to_stdout: true) do
-      {formatted_query, 0} -> String.trim_trailing(formatted_query)
-      _ -> query
-    end
-  end
-end
+EctoLogbook.install(MyApp.Repo,
+  colorize: true, # Use colors to highlight queries, parameters and db time
+  inline_params: true, # Try to inline parameters in the query
+  log_repo_name: true, # Log repo name (useful if multiple repos are used)
+  preprocess_metadata_callback: fn metadata -> metadata end,
+  ignore_event_callback: fn metadata -> !String.match(metadata[:query], ~r/SELECT/)  end
+)
 ```
 
-### Running tests
+See `EctoLogbook.install/2` for the full doc.
 
-You need to run a local postgres server for the tests to interact with. This is one way to do it:
+### Display stacktrace info
 
-```console
-~$ docker run -p5432:5432 --rm --name ecto_dev_logger_postgres -e POSTGRES_PASSWORD=postgres -d postgres
+If the repo `:stacktrace` configuration is set to `true`, MFA information will be included in the log metadata.
+
+```elixir
+config :my_app, MyApp.Repo, log: false, stacktrace: true
 ```
