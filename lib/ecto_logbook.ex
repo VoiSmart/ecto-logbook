@@ -21,7 +21,7 @@ defmodule EctoLogbook do
           | {:inline_params, boolean()}
           | {:log_repo_name, boolean()}
           | {:ignore_event_callback, (metadata :: map() -> boolean())}
-          | {:before_inline_callback, (query :: String.t() -> String.t())}
+          | {:preprocess_metadata_callback, (metadata :: map() -> map())}
           | {:debug_telemetry_metadata, boolean()}
 
   @doc """
@@ -35,7 +35,7 @@ defmodule EctoLogbook do
   * `:inline_params` - if true query params will be substituted and inlined in log message.
   * `:log_repo_name` - when truthy will add the repo name into the log.
   * `:ignore_event_callback` - allows to skip telemetry events. see `ignore_event/1`
-  * `:before_inline_callback` - allows to modify the query before inlining of bindings. see `before_inline/1`
+  * `:preprocess_metadata_callback` - allows to modify the metadata before logging. see `preprocess_metadata/1`
   * `:debug_telemetry_metadata` - for debugging purposes, if true also logs all telemetry metadata.
   """
   @spec install(repo_module :: module(), opts :: [option()]) :: :ok | {:error, :already_exists}
@@ -80,7 +80,9 @@ defmodule EctoLogbook do
         ) :: :ok
   def telemetry_handler(_event_name, measurements, metadata, config) do
     ignore_event_callback = config[:ignore_event_callback] || (&ignore_event/1)
-    before_inline_callback = config[:before_inline_callback] || (&before_inline/1)
+
+    preprocess_metadata_callback =
+      config[:preprocess_metadata_callback] || (&preprocess_metadata/1)
 
     if !Logbook.enabled?(@logbook_tag, :debug) or ignore_event_callback.(metadata) do
       :ok
@@ -88,12 +90,12 @@ defmodule EctoLogbook do
       config[:debug_telemetry_metadata] && Logbook.debug(@logbook_tag, inspect(metadata))
 
       Logbook.debug(@logbook_tag, fn ->
+        metadata = preprocess_metadata_callback.(metadata)
         query = String.Chars.to_string(metadata.query)
         reset_color = (config[:colorize] && IO.ANSI.enabled?() && @reset_color) || ""
 
         log_query =
-          before_inline_callback.(query)
-          |> maybe_inline_params(metadata, config, reset_color)
+          maybe_inline_params(query, metadata, config, reset_color)
           |> EctoLogbook.Colors.colorize_sql(reset_color)
 
         log_metadata =
@@ -125,16 +127,23 @@ defmodule EctoLogbook do
   end
 
   @doc """
-  Default callback before inlining params
+  Default callback to preprocess metadata
 
-  By default, do nothing and return the same query
-  To override, set `before_inline_callback: fn query -> query end` option in `install/2`
+  By default, do nothing and return the same metadata
+  To override, set `preprocess_metadata_callback: fn meta -> meta end` option in `install/2`
 
   You can use this callback to format the query using external utility, like `pgformatter`, etc.
-  You can set this to `fn query -> String.replace(query, "\"", "") end` to remove pesky quotes.
+  You can remove double quotes from the query with something like:
+
+  ```elixir
+  EctoLogbook.install(MyApp.Repo,
+      preprocess_metadata_callback: fn %{query: query} = meta ->
+        %{meta | query: String.replace(query, "\"", "")}
+      end
+    )
   """
-  @spec before_inline(String.t()) :: String.t()
-  def before_inline(query), do: query
+  @spec preprocess_metadata(map()) :: map()
+  def preprocess_metadata(meta), do: meta
 
   defp maybe_inline_params(query, metadata, conf, reset_color) do
     case conf[:inline_params] do

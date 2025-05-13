@@ -13,7 +13,9 @@ defmodule EctoLogbookTest do
       log_repo_name: true,
       inline_params: true,
       # debug_telemetry_metadata: true,
-      before_inline_callback: fn query -> String.replace(query, "\"", "") end
+      preprocess_metadata_callback: fn %{query: query} = meta ->
+        %{meta | query: String.replace(query, "\"", "")}
+      end
     )
 
     on_exit(fn ->
