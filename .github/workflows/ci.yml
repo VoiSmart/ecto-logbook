@@ -1,3 +1,5 @@
+name: Build, lint, format, and test project.
+
 on: [push, pull_request]
 jobs:
   test:
