@@ -146,13 +146,16 @@ defmodule EctoLogbook do
   def preprocess_metadata(meta), do: meta
 
   defp maybe_inline_params(query, metadata, conf, reset_color) do
-    case conf[:inline_params] do
-      true ->
+    cond do
+      conf[:inline_params] ->
         param_reset_color = (reset_color != "" && __MODULE__.Colors.sql_color(query)) || ""
         repo = (metadata[:repo] && metadata[:repo].__adapter__()) || nil
         __MODULE__.Inline.inline_params(query, metadata[:cast_params], param_reset_color, repo)
 
-      _ ->
+      metadata[:cast_params] == nil ->
+        query
+
+      true ->
         "#{query} #{inspect(metadata[:cast_params])}"
     end
   end

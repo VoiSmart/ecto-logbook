@@ -99,6 +99,11 @@ defmodule EctoLogbookTest do
                ~S|INSERT INTO "posts" ("array_of_enums") VALUES (?1) RETURNING "id" [[:foo, :baz]]|
                |> String.replace("\"", "\\\"")
     end
+
+    test "don't inspect params when nil" do
+      assert :ok = EctoLogbook.install(Repo2)
+      assert capture_log(fn -> Repo2.query!("SELECT 1") end) =~ ~S|msg="SELECT 1"|
+    end
   end
 
   defp setup_repo(repo) do
