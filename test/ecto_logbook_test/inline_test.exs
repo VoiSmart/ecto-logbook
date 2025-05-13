@@ -1,8 +1,8 @@
-defmodule Ecto.DevLogger.InlineTest do
+defmodule EctoLogbookTest.InlineTest do
   @moduledoc false
 
   use ExUnit.Case
-  alias Ecto.DevLogger.Inline
+  alias EctoLogbook.Inline
 
   @disable_color ""
   @params [
@@ -29,56 +29,56 @@ defmodule Ecto.DevLogger.InlineTest do
 
     test "param is inspected when PrintableParameter.to_expression fails" do
       assert Inline.inline_params(
-               "SELECT $1",
+               ~s|SELECT $1|,
                [%ArgumentError{message: "TEST"}],
                @disable_color,
                Ecto.Adapters.Postgres
              ) ==
-               "SELECT %ArgumentError{message: \"TEST\"}"
+               ~s|SELECT %ArgumentError{message: "TEST"}|
     end
 
     test "Postgres" do
       assert Inline.inline_params(
-               "SELECT c0.\"name\" FROM \"posts\" AS c0 WHERE (((c0.\"id\" != $1) AND c0.\"type\" = ANY($2)) OR (c0.\"priority?\" = $3))",
+               ~s|SELECT c0."name" FROM "posts" AS c0 WHERE (((c0."id" != $1) AND c0."type" = ANY($2)) OR (c0."priority?" = $3))|,
                @params,
                @disable_color,
                Ecto.Adapters.Postgres
              ) ==
-               "SELECT c0.\"name\" FROM \"posts\" AS c0 WHERE (((c0.\"id\" != '5f833165-b0d4-4d56-b21f-500d29bd94ae') AND c0.\"type\" = ANY('{κόσμε,te''st}')) OR (c0.\"priority?\" = 1))"
+               ~s|SELECT c0."name" FROM "posts" AS c0 WHERE (((c0."id" != '5f833165-b0d4-4d56-b21f-500d29bd94ae') AND c0."type" = ANY('{κόσμε,te''st}')) OR (c0."priority?" = 1))|
     end
 
     test "Tds" do
       assert Inline.inline_params(
-               "SELECT c0.\"name\" FROM \"posts\" AS c0 WHERE (((c0.\"id\" != @1) AND c0.\"type\" = ANY(@2)) OR (c0.\"priority?\" = @3))",
+               ~s|SELECT c0."name" FROM "posts" AS c0 WHERE (((c0."id" != @1) AND c0."type" = ANY(@2)) OR (c0."priority?" = @3))|,
                @params,
                @disable_color,
                Ecto.Adapters.Tds
              ) ==
-               "SELECT c0.\"name\" FROM \"posts\" AS c0 WHERE (((c0.\"id\" != '5f833165-b0d4-4d56-b21f-500d29bd94ae') AND c0.\"type\" = ANY('{κόσμε,te''st}')) OR (c0.\"priority?\" = 1))"
+               ~s|SELECT c0.\"name\" FROM \"posts\" AS c0 WHERE (((c0.\"id\" != '5f833165-b0d4-4d56-b21f-500d29bd94ae') AND c0.\"type\" = ANY('{κόσμε,te''st}')) OR (c0.\"priority?\" = 1))|
     end
 
     test "MySQL" do
       assert to_string(
                Inline.inline_params(
-                 "SELECT c0.\"name\" FROM \"posts\" AS c0 WHERE (((c0.\"id\" != ?) AND c0.\"type\" = ANY(?)) OR (c0.\"priority?\" = ?))",
+                 ~s|SELECT c0.\"name\" FROM \"posts\" AS c0 WHERE (((c0.\"id\" != ?) AND c0.\"type\" = ANY(?)) OR (c0.\"priority?\" = ?))|,
                  @params,
                  @disable_color,
                  Ecto.Adapters.MyXQL
                )
              ) ==
-               "SELECT c0.\"name\" FROM \"posts\" AS c0 WHERE (((c0.\"id\" != '5f833165-b0d4-4d56-b21f-500d29bd94ae') AND c0.\"type\" = ANY('{κόσμε,te''st}')) OR (c0.\"priority?\" = 1))"
+               ~s|SELECT c0.\"name\" FROM \"posts\" AS c0 WHERE (((c0.\"id\" != '5f833165-b0d4-4d56-b21f-500d29bd94ae') AND c0.\"type\" = ANY('{κόσμε,te''st}')) OR (c0.\"priority?\" = 1))|
     end
 
     test "SQLite3" do
       assert to_string(
                Inline.inline_params(
-                 "SELECT c0.\"name\" FROM \"posts\" AS c0 WHERE (((c0.\"id\" != ?1) AND c0.\"type\" = ANY(?2)) OR (c0.\"priority\" = ?3))",
+                 ~s|SELECT c0."name" FROM "posts" AS c0 WHERE (((c0."id" != ?1) AND c0."type" = ANY(?2)) OR (c0."priority" = ?3))|,
                  @params,
                  @disable_color,
                  Ecto.Adapters.SQLite3
                )
              ) ==
-               "SELECT c0.\"name\" FROM \"posts\" AS c0 WHERE (((c0.\"id\" != '5f833165-b0d4-4d56-b21f-500d29bd94ae') AND c0.\"type\" = ANY('{κόσμε,te''st}')) OR (c0.\"priority\" = 1))"
+               ~s|SELECT c0."name" FROM "posts" AS c0 WHERE (((c0."id" != '5f833165-b0d4-4d56-b21f-500d29bd94ae') AND c0."type" = ANY('{κόσμε,te''st}')) OR (c0."priority" = 1))|
     end
   end
 end

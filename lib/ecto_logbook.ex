@@ -1,4 +1,4 @@
-defmodule Ecto.DevLogger do
+defmodule EctoLogbook do
   @moduledoc """
   An alternative logger for Ecto queries.
 
@@ -68,7 +68,7 @@ defmodule Ecto.DevLogger do
   @spec handler_id(repo_module :: module()) :: list()
   def handler_id(repo_module) do
     config = repo_module.config()
-    [:ecto_dev_logger] ++ config[:telemetry_prefix]
+    [:ecto_logbook] ++ config[:telemetry_prefix]
   end
 
   @doc "Telemetry handler which logs queries."
@@ -94,7 +94,7 @@ defmodule Ecto.DevLogger do
         log_query =
           before_inline_callback.(query)
           |> maybe_inline_params(metadata, config, reset_color)
-          |> Ecto.DevLogger.Colors.colorize_sql(reset_color)
+          |> EctoLogbook.Colors.colorize_sql(reset_color)
 
         log_metadata =
           [query: log_ok_error(metadata.result, reset_color)]
@@ -156,7 +156,7 @@ defmodule Ecto.DevLogger do
     end
   end
 
-  @spec maybe_add_md_repo(Keyword.t(), module(), atom(), map()) :: Keyword.t()
+  @spec maybe_add_md_repo(Keyword.t(), module(), String.t(), map()) :: Keyword.t()
   defp maybe_add_md_repo(md, repo, color, config) do
     case {repo, config[:log_repo_name]} do
       {nil, _} -> md
@@ -165,7 +165,7 @@ defmodule Ecto.DevLogger do
     end
   end
 
-  @spec maybe_add_md_source(Keyword.t(), String.t() | nil, atom()) :: Keyword.t()
+  @spec maybe_add_md_source(Keyword.t(), String.t() | nil, String.t()) :: Keyword.t()
   defp maybe_add_md_source(md, source, color) do
     case source do
       nil -> md
@@ -173,7 +173,7 @@ defmodule Ecto.DevLogger do
     end
   end
 
-  @spec maybe_add_md_time(Keyword.t(), atom(), map(), atom()) :: Keyword.t()
+  @spec maybe_add_md_time(Keyword.t(), atom(), map(), String.t()) :: Keyword.t()
   defp maybe_add_md_time(md, key, measurements, color) do
     case measurements do
       %{^key => time} ->

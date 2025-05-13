@@ -1,7 +1,7 @@
-defmodule Repo do
+defmodule EctoLogbookTest.Repo do
   use Ecto.Repo, adapter: Ecto.Adapters.SQLite3, otp_app: :test
 
-  def get_config() do
+  def get_config do
     [
       log: false,
       otp_app: :test,
@@ -12,10 +12,10 @@ defmodule Repo do
   end
 end
 
-defmodule Repo2 do
+defmodule EctoLogbookTest.Repo2 do
   use Ecto.Repo, adapter: Ecto.Adapters.SQLite3, otp_app: :test
 
-  def get_config() do
+  def get_config do
     [
       log: false,
       otp_app: :test,
@@ -26,7 +26,7 @@ defmodule Repo2 do
   end
 end
 
-defmodule Post do
+defmodule EctoLogbookTest.Post do
   use Ecto.Schema
   @enum [foo: 1, bar: 2, baz: 5]
 

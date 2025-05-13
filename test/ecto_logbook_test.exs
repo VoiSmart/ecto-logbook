@@ -1,13 +1,14 @@
-defmodule Ecto.DevLoggerTest do
+defmodule EctoLogbookTest do
   Code.require_file("fixtures.ex", __DIR__)
 
+  alias EctoLogbookTest.{Post, Repo, Repo2}
   use ExUnit.Case
   import ExUnit.CaptureLog
 
   setup do
     setup_repo(Repo)
 
-    Ecto.DevLogger.install(Repo,
+    EctoLogbook.install(Repo,
       colorize: false,
       log_repo_name: true,
       inline_params: true,
@@ -16,17 +17,17 @@ defmodule Ecto.DevLoggerTest do
     )
 
     on_exit(fn ->
-      Ecto.DevLogger.uninstall(Repo)
+      EctoLogbook.uninstall(Repo)
       Repo.get_config() |> Repo.__adapter__().storage_down()
     end)
   end
 
   test "install returns error from failure to attach " do
-    assert {:error, :already_exists} = Ecto.DevLogger.install(Repo)
+    assert {:error, :already_exists} = EctoLogbook.install(Repo)
   end
 
-  test "handler_id\1" do
-    assert Ecto.DevLogger.handler_id(Repo) == [:ecto_dev_logger, :repo]
+  test "handler_id/1" do
+    assert EctoLogbook.handler_id(Repo) == [:ecto_logbook, :ecto_logbook_test, :repo]
   end
 
   test "INSERT SELECT UPDATE DELETE" do
@@ -74,13 +75,13 @@ defmodule Ecto.DevLoggerTest do
       setup_repo(Repo2)
 
       on_exit(fn ->
-        Ecto.DevLogger.uninstall(Repo2)
+        EctoLogbook.uninstall(Repo2)
         Repo2.get_config() |> Repo2.__adapter__().storage_down()
       end)
     end
 
     test "install of second repo works" do
-      assert :ok = Ecto.DevLogger.install(Repo2)
+      assert :ok = EctoLogbook.install(Repo2)
       repo1_prefix = Repo.config()[:telemetry_prefix]
       [repo1_handler] = :telemetry.list_handlers(repo1_prefix)
       repo2_prefix = Repo2.config()[:telemetry_prefix]
@@ -90,7 +91,7 @@ defmodule Ecto.DevLoggerTest do
     end
 
     test "scond repos does not inlines params" do
-      assert :ok = Ecto.DevLogger.install(Repo2)
+      assert :ok = EctoLogbook.install(Repo2)
 
       assert capture_log(fn -> Repo2.insert!(%Post{array_of_enums: [:foo, :baz]}) end) =~
                ~S|INSERT INTO "posts" ("array_of_enums") VALUES (?1) RETURNING "id" [[:foo, :baz]]|

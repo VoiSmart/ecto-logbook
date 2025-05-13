@@ -1,26 +1,26 @@
-defprotocol Ecto.DevLogger.PrintableParameter do
+defprotocol EctoLogbook.PrintableParameter do
   @moduledoc """
   A protocol to print various data structures as valid SQL expressions.
 
   `to_expression/1` is the main function and `to_string_literal/1` is an optional helper for it.
 
-  `Ecto.DevLogger` tries to represent complex terms, like arrays (lists) and composite types (tuples)
+  `EctoLogbook` tries to represent complex terms, like arrays (lists) and composite types (tuples)
   as string literal first. Not all terms are easy/efficient/whatever to represent as strings, so if
   `to_string_literal/1` returns a string for all elements inside the array,
   then array will be represented as string as well. Otherwise, array will be represented using `ARRAY` constructor:
 
-      iex> Ecto.DevLogger.PrintableParameter.to_expression(["Elixir", "Ecto"])
+      iex> EctoLogbook.PrintableParameter.to_expression(["Elixir", "Ecto"])
       "'{Elixir,Ecto}'"
 
-      iex> Ecto.DevLogger.PrintableParameter.to_expression(["Elixir", "Ecto", <<153>>])
+      iex> EctoLogbook.PrintableParameter.to_expression(["Elixir", "Ecto", <<153>>])
       "ARRAY['Elixir','Ecto',DECODE('mQ==','BASE64')]"
 
   The same is true for composite types (tuples):
 
-      iex> Ecto.DevLogger.PrintableParameter.to_expression({"Elixir", "Ecto"})
+      iex> EctoLogbook.PrintableParameter.to_expression({"Elixir", "Ecto"})
       "'(Elixir,Ecto)'"
 
-      iex> Ecto.DevLogger.PrintableParameter.to_expression({"Elixir", "Ecto", <<153>>})
+      iex> EctoLogbook.PrintableParameter.to_expression({"Elixir", "Ecto", <<153>>})
       "ROW('Elixir','Ecto',DECODE('mQ==','BASE64'))"
   """
 
@@ -37,11 +37,11 @@ defprotocol Ecto.DevLogger.PrintableParameter do
   def to_string_literal(term)
 end
 
-defimpl Ecto.DevLogger.PrintableParameter, for: Atom do
+defimpl EctoLogbook.PrintableParameter, for: Atom do
   def to_expression(nil), do: "NULL"
   def to_expression(true), do: "true"
   def to_expression(false), do: "false"
-  def to_expression(atom), do: Ecto.DevLogger.Utils.in_string_quotes("#{atom}")
+  def to_expression(atom), do: EctoLogbook.Utils.in_string_quotes("#{atom}")
 
   def to_string_literal(nil), do: "NULL"
   def to_string_literal(true), do: "true"
@@ -49,18 +49,18 @@ defimpl Ecto.DevLogger.PrintableParameter, for: Atom do
   def to_string_literal(atom), do: Atom.to_string(atom)
 end
 
-defimpl Ecto.DevLogger.PrintableParameter, for: Map do
+defimpl EctoLogbook.PrintableParameter, for: Map do
   def to_expression(map) do
-    map |> to_string_literal() |> Ecto.DevLogger.Utils.in_string_quotes()
+    map |> to_string_literal() |> EctoLogbook.Utils.in_string_quotes()
   end
 
   def to_string_literal(map), do: Jason.encode!(map)
 end
 
 if Code.ensure_loaded?(Geo.Point) do
-  defimpl Ecto.DevLogger.PrintableParameter, for: Geo.Point do
+  defimpl EctoLogbook.PrintableParameter, for: Geo.Point do
     def to_expression(point) do
-      point |> to_string_literal() |> Ecto.DevLogger.Utils.in_string_quotes()
+      point |> to_string_literal() |> EctoLogbook.Utils.in_string_quotes()
     end
 
     def to_string_literal(point), do: Jason.encode!(point)
@@ -68,16 +68,16 @@ if Code.ensure_loaded?(Geo.Point) do
 end
 
 if Code.ensure_loaded?(Geo.Polygon) do
-  defimpl Ecto.DevLogger.PrintableParameter, for: Geo.Polygon do
+  defimpl EctoLogbook.PrintableParameter, for: Geo.Polygon do
     def to_expression(point) do
-      point |> to_string_literal() |> Ecto.DevLogger.Utils.in_string_quotes()
+      point |> to_string_literal() |> EctoLogbook.Utils.in_string_quotes()
     end
 
     def to_string_literal(point), do: Jason.encode!(point)
   end
 end
 
-defimpl Ecto.DevLogger.PrintableParameter, for: Tuple do
+defimpl EctoLogbook.PrintableParameter, for: Tuple do
   def to_expression(tuple) do
     case to_string_literal(tuple) do
       nil ->
@@ -85,16 +85,16 @@ defimpl Ecto.DevLogger.PrintableParameter, for: Tuple do
           Enum.map_join(
             Tuple.to_list(tuple),
             ",",
-            &Ecto.DevLogger.PrintableParameter.to_expression/1
+            &EctoLogbook.PrintableParameter.to_expression/1
           ) <> ")"
 
       value ->
-        Ecto.DevLogger.Utils.in_string_quotes(value)
+        EctoLogbook.Utils.in_string_quotes(value)
     end
   end
 
   def to_string_literal(tuple) do
-    case Ecto.DevLogger.Utils.all_to_string_literal(Tuple.to_list(tuple)) do
+    case EctoLogbook.Utils.all_to_string_literal(Tuple.to_list(tuple)) do
       :error ->
         nil
 
@@ -121,66 +121,66 @@ defimpl Ecto.DevLogger.PrintableParameter, for: Tuple do
   end
 end
 
-defimpl Ecto.DevLogger.PrintableParameter, for: Decimal do
+defimpl EctoLogbook.PrintableParameter, for: Decimal do
   def to_expression(decimal), do: to_string_literal(decimal)
   def to_string_literal(decimal), do: Decimal.to_string(decimal)
 end
 
-defimpl Ecto.DevLogger.PrintableParameter, for: Integer do
+defimpl EctoLogbook.PrintableParameter, for: Integer do
   def to_expression(integer), do: to_string_literal(integer)
   def to_string_literal(integer), do: Integer.to_string(integer)
 end
 
-defimpl Ecto.DevLogger.PrintableParameter, for: Float do
+defimpl EctoLogbook.PrintableParameter, for: Float do
   def to_expression(float), do: to_string_literal(float)
   def to_string_literal(float), do: Float.to_string(float)
 end
 
-defimpl Ecto.DevLogger.PrintableParameter, for: Date do
+defimpl EctoLogbook.PrintableParameter, for: Date do
   def to_expression(date) do
     date
     |> to_string_literal()
-    |> Ecto.DevLogger.Utils.in_string_quotes()
+    |> EctoLogbook.Utils.in_string_quotes()
   end
 
   def to_string_literal(date), do: Date.to_string(date)
 end
 
-defimpl Ecto.DevLogger.PrintableParameter, for: DateTime do
+defimpl EctoLogbook.PrintableParameter, for: DateTime do
   def to_expression(date_time) do
     date_time
     |> to_string_literal()
-    |> Ecto.DevLogger.Utils.in_string_quotes()
+    |> EctoLogbook.Utils.in_string_quotes()
   end
 
   def to_string_literal(date_time), do: DateTime.to_string(date_time)
 end
 
-defimpl Ecto.DevLogger.PrintableParameter, for: NaiveDateTime do
+defimpl EctoLogbook.PrintableParameter, for: NaiveDateTime do
   def to_expression(naive_date_time) do
     naive_date_time
     |> to_string_literal()
-    |> Ecto.DevLogger.Utils.in_string_quotes()
+    |> EctoLogbook.Utils.in_string_quotes()
   end
 
   def to_string_literal(naive_date_time), do: NaiveDateTime.to_string(naive_date_time)
 end
 
-defimpl Ecto.DevLogger.PrintableParameter, for: Time do
+defimpl EctoLogbook.PrintableParameter, for: Time do
   def to_expression(time) do
     time
     |> to_string_literal()
-    |> Ecto.DevLogger.Utils.in_string_quotes()
+    |> EctoLogbook.Utils.in_string_quotes()
   end
 
   def to_string_literal(time), do: Time.to_string(time)
 end
 
-defimpl Ecto.DevLogger.PrintableParameter, for: BitString do
+defimpl EctoLogbook.PrintableParameter, for: BitString do
   def to_expression(binary) do
     case to_string_literal(binary) do
       nil -> "DECODE('#{Base.encode64(binary)}','BASE64')"
-      value -> Ecto.DevLogger.Utils.in_string_quotes(value)
+      value -> EctoLogbook.Utils.in_string_quotes(value)
     end
   end
 
@@ -193,20 +193,20 @@ defimpl Ecto.DevLogger.PrintableParameter, for: BitString do
   end
 end
 
-defimpl Ecto.DevLogger.PrintableParameter, for: List do
+defimpl EctoLogbook.PrintableParameter, for: List do
   def to_expression(list) do
     case to_string_literal(list) do
       nil ->
         "ARRAY[" <>
-          Enum.map_join(list, ",", &Ecto.DevLogger.PrintableParameter.to_expression/1) <> "]"
+          Enum.map_join(list, ",", &EctoLogbook.PrintableParameter.to_expression/1) <> "]"
 
       value ->
-        Ecto.DevLogger.Utils.in_string_quotes(value)
+        EctoLogbook.Utils.in_string_quotes(value)
     end
   end
 
   def to_string_literal(list) do
-    case {list, Ecto.DevLogger.Utils.all_to_string_literal(list)} do
+    case {list, EctoLogbook.Utils.all_to_string_literal(list)} do
       {_, :error} ->
         nil
 
@@ -237,11 +237,11 @@ defimpl Ecto.DevLogger.PrintableParameter, for: List do
 end
 
 if Code.ensure_loaded?(Postgrex.MACADDR) do
-  defimpl Ecto.DevLogger.PrintableParameter, for: Postgrex.MACADDR do
+  defimpl EctoLogbook.PrintableParameter, for: Postgrex.MACADDR do
     def to_expression(macaddr) do
       macaddr
       |> to_string_literal()
-      |> Ecto.DevLogger.Utils.in_string_quotes()
+      |> EctoLogbook.Utils.in_string_quotes()
     end
 
     def to_string_literal(macaddr) do
@@ -257,9 +257,9 @@ if Code.ensure_loaded?(Postgrex.MACADDR) do
 end
 
 if Code.ensure_loaded?(Postgrex.Interval) do
-  defimpl Ecto.DevLogger.PrintableParameter, for: Postgrex.Interval do
+  defimpl EctoLogbook.PrintableParameter, for: Postgrex.Interval do
     def to_expression(struct),
-      do: Postgrex.Interval.to_string(struct) |> Ecto.DevLogger.Utils.in_string_quotes()
+      do: Postgrex.Interval.to_string(struct) |> EctoLogbook.Utils.in_string_quotes()
 
     def to_string_literal(struct),
       do: Postgrex.Interval.to_string(struct)
@@ -267,11 +267,11 @@ if Code.ensure_loaded?(Postgrex.Interval) do
 end
 
 if Code.ensure_loaded?(Postgrex.INET) do
-  defimpl Ecto.DevLogger.PrintableParameter, for: Postgrex.INET do
+  defimpl EctoLogbook.PrintableParameter, for: Postgrex.INET do
     def to_expression(inet) do
       inet
       |> to_string_literal()
-      |> Ecto.DevLogger.Utils.in_string_quotes()
+      |> EctoLogbook.Utils.in_string_quotes()
     end
 
     def to_string_literal(inet) do
@@ -287,7 +287,7 @@ if Code.ensure_loaded?(Postgrex.INET) do
 end
 
 if Code.ensure_loaded?(Postgrex.Lexeme) do
-  defimpl Ecto.DevLogger.PrintableParameter, for: Postgrex.Lexeme do
+  defimpl EctoLogbook.PrintableParameter, for: Postgrex.Lexeme do
     def to_expression(lexeme) do
       raise "Invalid parameter: #{inspect(lexeme)} must be inside a list"
     end
@@ -295,7 +295,7 @@ if Code.ensure_loaded?(Postgrex.Lexeme) do
     def to_string_literal(lexeme) do
       word =
         if String.contains?(lexeme.word, [",", "'", " ", ":"]) do
-          Ecto.DevLogger.Utils.in_string_quotes(lexeme.word)
+          EctoLogbook.Utils.in_string_quotes(lexeme.word)
         else
           lexeme.word
         end
