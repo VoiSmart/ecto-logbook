@@ -40,9 +40,11 @@ defmodule Ecto.DevLogger.MixProject do
     [
       {:ecto, "~> 3.12"},
       {:jason, "~> 1.4"},
+      {:logbook, "~> 4.0"},
       {:geo, "~> 3.5 or ~> 4.0", optional: true},
       {:ecto_sql, "~> 3.12", only: :test},
       {:postgrex, "~> 0.20", only: :test},
+      {:ecto_sqlite3, "~> 0.19", only: :test},
       {:excoveralls, "~> 0.18", only: :test},
       {:credo, "~> 1.7", only: [:dev, :test]},
       {:ex_doc, "~> 0.37", only: [:dev, :test], runtime: false},

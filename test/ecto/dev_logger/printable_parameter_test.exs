@@ -1,7 +1,7 @@
 defmodule Ecto.DevLogger.PrintableParameterTest do
   use ExUnit.Case, async: true
 
-  alias Postgrex.{INET, MACADDR, Interval, Lexeme}
+  alias Postgrex.{INET, Interval, Lexeme, MACADDR}
 
   doctest Ecto.DevLogger.PrintableParameter
   import Ecto.DevLogger.PrintableParameter
@@ -29,6 +29,10 @@ defmodule Ecto.DevLogger.PrintableParameterTest do
       assert to_expression("string with single quote: '") == ~s|'string with single quote: '''|
       assert to_expression("string with double quote: \"") == ~s|'string with double quote: "'|
       assert to_expression(<<95, 131, 49, 101, 176, 212>>) == "DECODE('X4MxZbDU','BASE64')"
+      uuid = <<79, 208, 231, 171, 38, 209, 76, 228, 170, 26, 41, 3, 45, 16, 79, 73>>
+      assert to_expression(uuid) == "'4fd0e7ab-26d1-4ce4-aa1a-29032d104f49'"
+      ulid = <<1, 150, 166, 102, 15, 218, 236, 148, 23, 193, 20, 233, 118, 145, 114, 127>>
+      assert to_expression(ulid) == "'0196a666-0fda-ec94-17c1-14e97691727f'"
     end
 
     test "Datetimes" do
@@ -36,18 +40,6 @@ defmodule Ecto.DevLogger.PrintableParameterTest do
       assert to_expression(~U[2022-11-04 10:40:11.362181Z]) == "'2022-11-04 10:40:11.362181Z'"
       assert to_expression(~N[2022-11-04 10:40:01.256931]) == "'2022-11-04 10:40:01.256931'"
       assert to_expression(~T[10:40:17.657300]) == "'10:40:17.657300'"
-    end
-
-    test "UUIDs" do
-      assert to_expression("dc2ec804-6ee2-4689-a8f1-be59aa80771f") ==
-               "'dc2ec804-6ee2-4689-a8f1-be59aa80771f'"
-
-      assert to_expression("0196a5bc-da1e-b971-264d-cf9c3088998b") ==
-               "'0196a5bc-da1e-b971-264d-cf9c3088998b'"
-    end
-
-    test "NumericEnums" do
-      assert to_expression(%Ecto.DevLogger.NumericEnum{integer: 1, atom: :one}) == "1/*one*/"
     end
 
     test "Postgrex types" do
@@ -121,10 +113,6 @@ defmodule Ecto.DevLogger.PrintableParameterTest do
                ~T[10:40:17.657300]
              ]) ==
                "'{2022-11-04,2022-11-04 10:40:11.362181Z,2022-11-04 10:40:01.256931,10:40:17.657300}'"
-
-      # NumericEnums
-      assert to_expression([%Ecto.DevLogger.NumericEnum{integer: 1, atom: :one}]) ==
-               "ARRAY[1/*one*/]"
 
       # Postgrex types
       assert to_expression([

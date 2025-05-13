@@ -1,3 +1,5 @@
 import Config
 
-config :logger, :console, format: "\n$metadata[$level] $message\n"
+config :logger, :level, :debug
+config :logbook, :default_tag_level, :debug
+config :logger, :default_formatter, format: {Logbook.Formatters.Logfmt, :format}, metadata: :all

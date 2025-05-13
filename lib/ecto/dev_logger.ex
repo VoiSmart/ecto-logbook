@@ -2,14 +2,27 @@ defmodule Ecto.DevLogger do
   @moduledoc """
   An alternative logger for Ecto queries.
 
+  A fork of https://github.com/fuelen/ecto_dev_logger
+
   It inlines bindings into the query, so it is easy to copy-paste logged SQL and run it in any IDE for debugging without
   manual transformation of common elixir terms to string representation (binary UUID, DateTime, Decimal, json, etc).
   Also, it highlights db time to make slow queries noticeable. Source table and inlined bindings are highlighted as well.
   """
 
-  require Logger
+  require Logbook
+  @logbook_tag :ecto_logbook
+  @reset_color IO.ANSI.cyan()
 
-  @type option :: {:log_repo_name, boolean()} | {:ignore_event, (metadata :: map() -> boolean())}
+  @typedoc """
+  Options for `install/2`
+  """
+  @type option ::
+          {:colorize, boolean()}
+          | {:inline_params, boolean()}
+          | {:log_repo_name, boolean()}
+          | {:ignore_event_callback, (metadata :: map() -> boolean())}
+          | {:before_inline_callback, (query :: String.t() -> String.t())}
+          | {:debug_telemetry_metadata, boolean()}
 
   @doc """
   Attaches `telemetry_handler/4` to application.
@@ -18,26 +31,24 @@ defmodule Ecto.DevLogger do
 
   ## Options
 
+  * `:colorize` - if true __MODULE__.colors will be applied to logs.
+  * `:inline_params` - if true query params will be substituted and inlined in log message.
   * `:log_repo_name` - when truthy will add the repo name into the log.
-  * `:ignore_event` - a callback which allows to skip some telemetry events thus skip printing logs.
-  By default, the library ignores events from `Oban` and events related to migration queries.
-  These checks are not overridable by `:ignore_event` callback and have priority over it.
-  * `:before_inline_callback` - a callback which allows to modify the query before inlining of bindings.
-  You can use this option to format the query using external utility, like `pgformatter`, etc.
+  * `:ignore_event_callback` - allows to skip telemetry events. see `ignore_event/1`
+  * `:before_inline_callback` - allows to modify the query before inlining of bindings. see `before_inline/1`
+  * `:debug_telemetry_metadata` - for debugging purposes, if true also logs all telemetry metadata.
   """
   @spec install(repo_module :: module(), opts :: [option()]) :: :ok | {:error, :already_exists}
   def install(repo_module, opts \\ []) when is_atom(repo_module) do
-    config = repo_module.config()
-
-    if config[:log] == false do
+    if repo_module.config()[:log] != false do
+      :ok
+    else
       :telemetry.attach(
         handler_id(repo_module),
-        config[:telemetry_prefix] ++ [:query],
+        repo_module.config()[:telemetry_prefix] ++ [:query],
         &__MODULE__.telemetry_handler/4,
         opts
       )
-    else
-      :ok
     end
   end
 
@@ -60,21 +71,6 @@ defmodule Ecto.DevLogger do
     [:ecto_dev_logger] ++ config[:telemetry_prefix]
   end
 
-  defp oban_query?(metadata) do
-    not is_nil(metadata[:options][:oban_conf])
-  end
-
-  defp schema_migration?(metadata) do
-    metadata[:options][:schema_migration] == true
-  end
-
-  defp ignore_event?(config, metadata) do
-    oban_query?(metadata) or schema_migration?(metadata) or
-      (config[:ignore_event] || (&always_false/1)).(metadata)
-  end
-
-  defp always_false(_), do: false
-
   @doc "Telemetry handler which logs queries."
   @spec telemetry_handler(
           :telemetry.event_name(),
@@ -83,237 +79,125 @@ defmodule Ecto.DevLogger do
           [option()]
         ) :: :ok
   def telemetry_handler(_event_name, measurements, metadata, config) do
-    if ignore_event?(config, metadata) do
+    ignore_event_callback = config[:ignore_event_callback] || (&ignore_event/1)
+    before_inline_callback = config[:before_inline_callback] || (&before_inline/1)
+
+    if !Logbook.enabled?(@logbook_tag, :debug) or ignore_event_callback.(metadata) do
       :ok
     else
-      query = String.Chars.to_string(metadata.query)
-      color = sql_color(query)
-      repo_adapter = metadata[:repo].__adapter__()
-      before_inline_callback = config[:before_inline_callback] || (&Function.identity/1)
-      params = preprocess_params(metadata)
+      config[:debug_telemetry_metadata] && Logbook.debug(@logbook_tag, inspect(metadata))
 
-      Logger.debug(
-        fn ->
-          query
-          |> before_inline_callback.()
-          |> inline_params(params, color, repo_adapter)
-          |> log_sql_iodata(measurements, metadata, color, config)
-        end,
-        ansi_color: color
-      )
+      Logbook.debug(@logbook_tag, fn ->
+        query = String.Chars.to_string(metadata.query)
+        reset_color = (config[:colorize] && IO.ANSI.enabled?() && @reset_color) || ""
+
+        log_query =
+          before_inline_callback.(query)
+          |> maybe_inline_params(metadata, config, reset_color)
+          |> Ecto.DevLogger.Colors.colorize_sql(reset_color)
+
+        log_metadata =
+          [query: log_ok_error(metadata.result, reset_color)]
+          |> maybe_add_md_repo(metadata[:repo], reset_color, config)
+          |> maybe_add_md_source(metadata[:source], reset_color)
+          |> maybe_add_md_time(:decode_time, measurements, reset_color)
+          |> maybe_add_md_time(:query_time, measurements, reset_color)
+          |> maybe_add_md_stacktrace(metadata[:stacktrace], metadata.repo)
+
+        {log_query, log_metadata}
+      end)
     end
   end
 
-  @doc false
-  def inline_params(query, params, _return_to_color, _repo_adapter) when map_size(params) == 0 do
-    query
-  end
+  @doc """
+  Default callback for ignoring events
 
-  def inline_params(query, params, return_to_color, repo_adapter)
-      when repo_adapter in [Ecto.Adapters.Postgres, Ecto.Adapters.Tds] do
-    params_by_index =
-      params
-      |> Enum.with_index(1)
-      |> Map.new(fn {value, index} -> {index, value} end)
-
-    placeholder_with_number_regex = placeholder_with_number_regex(repo_adapter)
-
-    String.replace(query, placeholder_with_number_regex, fn
-      <<_prefix::utf8, index::binary>> = replacement ->
-        case Map.fetch(params_by_index, String.to_integer(index)) do
-          {:ok, value} ->
-            try do
-              value
-              |> Ecto.DevLogger.PrintableParameter.to_expression()
-              |> colorize(IO.ANSI.color(0, 2, 3), apply(IO.ANSI, return_to_color, []))
-            rescue
-              Protocol.UndefinedError ->
-                value
-                |> inspect()
-                |> colorize(IO.ANSI.color(5, 0, 0), apply(IO.ANSI, return_to_color, []))
-            end
-
-          :error ->
-            replacement
-        end
-    end)
-  end
-
-  def inline_params(query, params, return_to_color, repo_adapter)
-      when repo_adapter in [Ecto.Adapters.MyXQL, Ecto.Adapters.SQLite3] do
-    params_by_index =
-      params
-      |> Enum.with_index()
-      |> Map.new(fn {value, index} -> {index, value} end)
-
-    query
-    |> String.split(~r{\?(?!")})
-    |> Enum.map_reduce(0, fn elem, index ->
-      formatted_value =
-        case Map.fetch(params_by_index, index) do
-          {:ok, value} ->
-            value
-            |> Ecto.DevLogger.PrintableParameter.to_expression()
-            |> colorize(IO.ANSI.color(0, 2, 3), apply(IO.ANSI, return_to_color, []))
-
-          :error ->
-            []
-        end
-
-      {[elem, formatted_value], index + 1}
-    end)
-    |> elem(0)
-  end
-
-  defp preprocess_params(metadata) do
-    cast_params = Map.get(metadata, :cast_params)
-
-    if is_list(cast_params) do
-      Enum.zip_with(
-        [metadata.params, cast_params],
-        fn
-          [[p | _] = integers, [c | _] = atoms] when is_integer(p) and is_atom(c) ->
-            Enum.zip_with([integers, atoms], fn [i, a] ->
-              %Ecto.DevLogger.NumericEnum{integer: i, atom: a}
-            end)
-
-          [integer, atom] when is_integer(integer) and is_atom(atom) ->
-            %Ecto.DevLogger.NumericEnum{integer: integer, atom: atom}
-
-          [[hex | _], [uuid | _] = uuids] when byte_size(hex) == 16 and byte_size(uuid) == 36 ->
-            uuids
-
-          [hex, uuid] when byte_size(hex) == 16 and byte_size(uuid) == 36 ->
-            uuid
-
-          [param, _] ->
-            param
-        end
-      )
-    else
-      metadata.params
+  By default, ignore events from `Oban` and events related to migration queries.
+  To override, set `ignore_event: fn _metadata -> false end` option in `install/2`
+  """
+  @spec ignore_event(map()) :: boolean()
+  def ignore_event(metadata) do
+    cond do
+      metadata[:options][:oban_conf] != nil -> true
+      metadata[:options][:schema_migration] == true -> true
+      true -> false
     end
   end
 
-  defp placeholder_with_number_regex(Ecto.Adapters.Postgres), do: ~r/\$\d+/
-  defp placeholder_with_number_regex(Ecto.Adapters.Tds), do: ~r/@\d+/
+  @doc """
+  Default callback before inlining params
 
-  defp log_sql_iodata(query, measurements, metadata, color, config) do
-    [
-      "QUERY",
-      ?\s,
-      log_ok_error(metadata.result),
-      log_ok_source(metadata.source, color),
-      log_repo(metadata.repo, color, config),
-      log_time("db", measurements, :query_time, true, color),
-      log_time("decode", measurements, :decode_time, false, color),
-      ?\n,
-      query,
-      log_stacktrace(metadata[:stacktrace], metadata.repo)
-    ]
-  end
+  By default, do nothing and return the same query
+  To override, set `before_inline_callback: fn query -> query end` option in `install/2`
 
-  defp log_ok_error({:ok, _res}), do: "OK"
-  defp log_ok_error({:error, _err}), do: "ERROR"
+  You can use this callback to format the query using external utility, like `pgformatter`, etc.
+  You can set this to `fn query -> String.replace(query, "\"", "") end` to remove pesky quotes.
+  """
+  @spec before_inline(String.t()) :: String.t()
+  def before_inline(query), do: query
 
-  defp log_repo(nil, _color, _config), do: ""
+  defp maybe_inline_params(query, metadata, conf, reset_color) do
+    case conf[:inline_params] do
+      true ->
+        param_reset_color = (reset_color != "" && __MODULE__.Colors.sql_color(query)) || ""
+        repo = (metadata[:repo] && metadata[:repo].__adapter__()) || nil
+        __MODULE__.Inline.inline_params(query, metadata[:cast_params], param_reset_color, repo)
 
-  defp log_repo(repo, color, config) do
-    Keyword.get(config, :log_repo_name, false)
-    |> case do
-      true -> [" repo=", colorize(inspect(repo), IO.ANSI.blue(), apply(IO.ANSI, color, []))]
-      _ -> ""
+      _ ->
+        "#{query} #{inspect(metadata[:cast_params])}"
     end
   end
 
-  defp log_ok_source(nil, _color), do: ""
+  defp log_ok_error({what, _res}, color) do
+    case what do
+      :ok -> __MODULE__.Colors.colorize("OK", IO.ANSI.green(), color)
+      :error -> __MODULE__.Colors.colorize("ERROR", IO.ANSI.red(), color)
+      _ -> __MODULE__.Colors.colorize("#{what}", IO.ANSI.red(), color)
+    end
+  end
 
-  defp log_ok_source(source, color),
-    do: [" source=", colorize(inspect(source), IO.ANSI.blue(), apply(IO.ANSI, color, []))]
+  @spec maybe_add_md_repo(Keyword.t(), module(), atom(), map()) :: Keyword.t()
+  defp maybe_add_md_repo(md, repo, color, config) do
+    case {repo, config[:log_repo_name]} do
+      {nil, _} -> md
+      {repo, true} -> md ++ [repo: __MODULE__.Colors.colorize(repo, IO.ANSI.blue(), color)]
+      _ -> md
+    end
+  end
 
-  defp log_time(label, measurements, key, force, color) do
+  @spec maybe_add_md_source(Keyword.t(), String.t() | nil, atom()) :: Keyword.t()
+  defp maybe_add_md_source(md, source, color) do
+    case source do
+      nil -> md
+      source -> md ++ [source: __MODULE__.Colors.colorize(source, IO.ANSI.blue(), color)]
+    end
+  end
+
+  @spec maybe_add_md_time(Keyword.t(), atom(), map(), atom()) :: Keyword.t()
+  defp maybe_add_md_time(md, key, measurements, color) do
     case measurements do
       %{^key => time} ->
         us = System.convert_time_unit(time, :native, :microsecond)
         ms = div(us, 100) / 10
-
-        if force or ms > 0 do
-          line = [?\s, label, ?=, :io_lib_format.fwrite_g(ms), ?m, ?s]
-
-          case duration_color(ms) do
-            nil -> line
-            duration_color -> colorize(line, duration_color, apply(IO.ANSI, color, []))
-          end
-        else
-          []
-        end
+        md ++ [{key, __MODULE__.Colors.colorize_duration(ms, color)}]
 
       %{} ->
-        []
+        md
     end
   end
 
-  @colorize_step 25
-  defp duration_color(duration) do
-    if IO.ANSI.enabled?() do
-      # don't colorize if duration < @colorize_step
-      duration = duration - @colorize_step
-
-      if duration > 0 do
-        # then every @colorize_step ms apply color from RGB(5, 5, 0) to RGB(5, 0, 0) (simple gradient from yellow to red)
-        green = 5 - min(div(floor(duration), @colorize_step), 5)
-        IO.ANSI.color(5, green, 0)
-      end
-    end
-  end
-
-  defp sql_color("SELECT" <> _), do: :cyan
-  defp sql_color("ROLLBACK" <> _), do: :red
-  defp sql_color("LOCK" <> _), do: :white
-  defp sql_color("INSERT" <> _), do: :green
-  defp sql_color("UPDATE" <> _), do: :yellow
-  defp sql_color("DELETE" <> _), do: :red
-  defp sql_color("begin" <> _), do: :magenta
-  defp sql_color("commit" <> _), do: :magenta
-  defp sql_color(_), do: :default_color
-
-  defp colorize(term, color, return_to_color) do
-    if IO.ANSI.enabled?() do
-      [color, term, return_to_color]
-    else
-      term
-    end
-  end
-
-  defp log_stacktrace(stacktrace, repo) do
+  defp maybe_add_md_stacktrace(md, stacktrace, repo) do
     with [_ | _] <- stacktrace,
-         {module, function, arity, info} <- last_non_ecto(Enum.reverse(stacktrace), repo, nil) do
-      [
-        if(IO.ANSI.enabled?(), do: IO.ANSI.light_black(), else: ""),
-        ?\n,
-        "↳ ",
-        Exception.format_mfa(module, function, arity),
-        log_stacktrace_info(info)
-      ]
+         {mod, fun, arity, info} <- last_non_ecto(Enum.reverse(stacktrace), repo, nil) do
+      md ++ [mfa: {mod, fun, arity}, file: info[:file], line: info[:line]]
     else
-      _ -> []
+      _ -> md
     end
-  end
-
-  defp log_stacktrace_info([file: file, line: line] ++ _) do
-    [", at: ", file, ?:, Integer.to_string(line)]
-  end
-
-  defp log_stacktrace_info(_) do
-    []
   end
 
   @repo_modules [Ecto.Repo.Queryable, Ecto.Repo.Schema, Ecto.Repo.Transaction]
-
-  defp last_non_ecto([{mod, _, _, _} | _stacktrace], repo, last)
-       when mod == repo or mod in @repo_modules,
-       do: last
-
-  defp last_non_ecto([last | stacktrace], repo, _last), do: last_non_ecto(stacktrace, repo, last)
   defp last_non_ecto([], _repo, last), do: last
+  defp last_non_ecto([{mod, _, _, _} | _], repo, last) when mod == repo, do: last
+  defp last_non_ecto([{mod, _, _, _} | _], _repo, last) when mod in @repo_modules, do: last
+  defp last_non_ecto([last | stacktrace], repo, _last), do: last_non_ecto(stacktrace, repo, last)
 end
