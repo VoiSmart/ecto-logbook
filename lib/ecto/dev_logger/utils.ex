@@ -3,10 +3,11 @@ defmodule Ecto.DevLogger.Utils do
 
   alias Ecto.DevLogger.PrintableParameter
 
+  @doc """
+  Returns string wrapped in `'`, escaping single quotes with `''`
+  """
   @spec in_string_quotes(String.t()) :: String.t()
-  def in_string_quotes(string) do
-    "'#{String.replace(string, "'", "''")}'"
-  end
+  def in_string_quotes(string), do: "'#{String.replace(string, "'", "''")}'"
 
   @doc """
   Takes a list of elements and returns `{:ok, list_with_string_literals}`
@@ -28,10 +29,4 @@ defmodule Ecto.DevLogger.Utils do
 
     with {:ok, list} <- result, do: {:ok, Enum.reverse(list)}
   end
-end
-
-defmodule Ecto.DevLogger.NumericEnum do
-  @moduledoc false
-  @type t :: %__MODULE__{integer: integer(), atom: atom()}
-  defstruct [:integer, :atom]
 end

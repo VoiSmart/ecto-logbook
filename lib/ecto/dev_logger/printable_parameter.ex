@@ -178,16 +178,17 @@ end
 
 defimpl Ecto.DevLogger.PrintableParameter, for: BitString do
   def to_expression(binary) do
-    if String.valid?(binary) do
-      Ecto.DevLogger.Utils.in_string_quotes(binary)
-    else
-      "DECODE('#{Base.encode64(binary)}','BASE64')"
+    case to_string_literal(binary) do
+      nil -> "DECODE('#{Base.encode64(binary)}','BASE64')"
+      value -> Ecto.DevLogger.Utils.in_string_quotes(value)
     end
   end
 
   def to_string_literal(binary) do
-    if String.valid?(binary) do
-      binary
+    cond do
+      Ecto.UUID.load(binary) != :error -> Ecto.UUID.load!(binary)
+      String.valid?(binary) -> binary
+      true -> nil
     end
   end
 end
@@ -315,9 +316,4 @@ if Code.ensure_loaded?(Postgrex.Lexeme) do
       end
     end
   end
-end
-
-defimpl Ecto.DevLogger.PrintableParameter, for: Ecto.DevLogger.NumericEnum do
-  def to_expression(enum), do: "#{enum.integer}/*#{enum.atom}*/"
-  def to_string_literal(_numeric_enum), do: nil
 end
