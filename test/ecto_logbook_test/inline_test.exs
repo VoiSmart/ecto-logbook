@@ -17,6 +17,11 @@ defmodule EctoLogbookTest.InlineTest do
                "query $1 @2 ?"
     end
 
+    test "query is unchanged when params are nil" do
+      assert Inline.inline_params("query $1 @2 ?", nil, @disable_color, Ecto.Adapters.Postgres) ==
+               "query $1 @2 ?"
+    end
+
     test "query is unchanged when the adapter is not supported" do
       assert Inline.inline_params(
                "query $1 @2 ?",
