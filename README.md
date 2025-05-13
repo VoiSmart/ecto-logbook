@@ -1,4 +1,4 @@
-# Ecto.DevLogger
+# EctoLogbook
 
 [![Hex.pm](https://img.shields.io/hexpm/v/ecto_dev_logger.svg)](https://hex.pm/packages/ecto_dev_logger)
 
@@ -9,7 +9,6 @@ manual transformation of common elixir terms to string representation (binary UU
 Also, it highlights db time to make slow queries noticeable. Source table and inlined bindings are highlighted as well.
 
 ![before and after](./assets/screenshot.png)
-
 
 ## Installation
 
@@ -24,16 +23,20 @@ end
 ```
 
 Then disable default logger for your repo in config file for dev mode:
+
 ```elixir
 if config_env() == :dev do
   config :my_app, MyApp.Repo, log: false
 end
 ```
+
 And install telemetry handler in `MyApp.Application`:
+
 ```elixir
-Ecto.DevLogger.install(MyApp.Repo)
+EctoLogbook.install(MyApp.Repo)
 ```
-Telemetry handler will be installed *only* if `log` configuration value is set to `false`.
+
+Telemetry handler will be installed _only_ if `log` configuration value is set to `false`.
 
 That's it.
 
@@ -41,7 +44,7 @@ The docs can be found at [https://hexdocs.pm/ecto_dev_logger](https://hexdocs.pm
 
 ### Development Only Installation
 
-If you turn off repo logging for any reason in production, you can configure `ecto_dev_logger` to *only* be available
+If you turn off repo logging for any reason in production, you can configure `ecto_dev_logger` to _only_ be available
 in development. In your `mix.exs`, restrict the installation to `:dev`:
 
 ```elixir
@@ -64,8 +67,8 @@ defmodule MyApp.Application do
     # ...
   end
 
-  if Code.ensure_loaded?(Ecto.DevLogger) do
-    defp maybe_install_ecto_dev_logger, do: Ecto.DevLogger.install(MyApp.Repo)
+  if Code.ensure_loaded?(EctoLogbook) do
+    defp maybe_install_ecto_dev_logger, do: EctoLogbook.install(MyApp.Repo)
   else
     defp maybe_install_ecto_dev_logger, do: :ok
   end
@@ -78,10 +81,11 @@ end
 
 It is possible to format queries using a `:before_inline_callback` option.
 Here is an example of setup using [pgFormatter](https://github.com/darold/pgFormatter) as an external utility:
+
 ```elixir
 defmodule MyApp.Application do
   def start(_type, _args) do
-    Ecto.DevLogger.install(MyApp.Repo, before_inline_callback: &__MODULE__.format_sql_query/1)
+    EctoLogbook.install(MyApp.Repo, before_inline_callback: &__MODULE__.format_sql_query/1)
   end
 
   def format_sql_query(query) do
@@ -95,7 +99,7 @@ end
 
 ### Running tests
 
-You need to run a local postgres server for the tests to interact with. This is one way to do it: 
+You need to run a local postgres server for the tests to interact with. This is one way to do it:
 
 ```console
 ~$ docker run -p5432:5432 --rm --name ecto_dev_logger_postgres -e POSTGRES_PASSWORD=postgres -d postgres

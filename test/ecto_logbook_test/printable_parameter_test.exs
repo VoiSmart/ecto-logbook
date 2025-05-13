@@ -1,10 +1,10 @@
-defmodule Ecto.DevLogger.PrintableParameterTest do
+defmodule EctoLogbookTest.PrintableParameterTest do
   use ExUnit.Case, async: true
 
   alias Postgrex.{INET, Interval, Lexeme, MACADDR}
 
-  doctest Ecto.DevLogger.PrintableParameter
-  import Ecto.DevLogger.PrintableParameter
+  doctest EctoLogbook.PrintableParameter
+  import EctoLogbook.PrintableParameter
 
   describe "to_expression/1" do
     test "Atom" do

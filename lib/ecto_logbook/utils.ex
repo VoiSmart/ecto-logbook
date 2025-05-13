@@ -1,7 +1,7 @@
-defmodule Ecto.DevLogger.Utils do
+defmodule EctoLogbook.Utils do
   @moduledoc false
 
-  alias Ecto.DevLogger.PrintableParameter
+  alias EctoLogbook.PrintableParameter
 
   @doc """
   Returns string wrapped in `'`, escaping single quotes with `''`

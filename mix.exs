@@ -1,11 +1,11 @@
-defmodule Ecto.DevLogger.MixProject do
+defmodule EctoLogbook.MixProject do
   use Mix.Project
   @version "1.14.1"
   @source_url "https://github.com/VoiSmart/ecto-logbook"
 
   def project do
     [
-      app: :ecto_dev_logger,
+      app: :ecto_logbook,
       version: @version,
       elixir: "~> 1.17",
       start_permanent: Mix.env() == :prod,

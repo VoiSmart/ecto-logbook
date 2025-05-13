@@ -1,10 +1,10 @@
-defmodule Ecto.DevLogger.Inline do
+defmodule EctoLogbook.Inline do
   @moduledoc """
   Replaces query parameters with their values
   """
 
-  alias Ecto.DevLogger.Colors
-  alias Ecto.DevLogger.PrintableParameter
+  alias EctoLogbook.Colors
+  alias EctoLogbook.PrintableParameter
 
   @spec inline_value(any(), String.t()) :: String.t()
   defp inline_value(value, reset_color) do
