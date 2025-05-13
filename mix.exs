@@ -1,6 +1,6 @@
 defmodule EctoLogbook.MixProject do
   use Mix.Project
-  @version "1.14.1"
+  @version "1.14.2"
   @source_url "https://github.com/VoiSmart/ecto-logbook"
 
   def project do
@@ -17,8 +17,7 @@ defmodule EctoLogbook.MixProject do
         main: "readme",
         extras: ["README.md": [title: "README"]],
         source_url: @source_url,
-        source_ref: "v#{@version}",
-        assets: %{"assets" => "assets"}
+        source_ref: "v#{@version}"
       ]
     ]
   end

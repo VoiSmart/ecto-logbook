@@ -25,7 +25,7 @@ The package can be installed by adding `ecto_logbook` to your list of dependenci
 ```elixir
 def deps do
   [
-    {:ecto_logbook, git: "git@github.com:voismart/ecto_logbook.git", tag: "v1.14.1"}
+    {:ecto_logbook, git: "https://github.com/voismart/ecto_logbook.git", tag: "v1.14.2"}
   ]
 end
 ```
