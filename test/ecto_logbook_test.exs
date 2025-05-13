@@ -5,6 +5,16 @@ defmodule EctoLogbookTest do
   use ExUnit.Case
   import ExUnit.CaptureLog
 
+  setup_all do
+    Application.put_env(:logger, :level, :debug)
+    Application.put_env(:logbook, :default_tag_level, :debug)
+
+    Application.put_env(:logger, :default_formatter,
+      format: {Logbook.Formatters.Logfmt, :format},
+      metadata: :all
+    )
+  end
+
   setup do
     setup_repo(Repo)
 
