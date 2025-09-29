@@ -24,15 +24,13 @@ defprotocol EctoLogbook.PrintableParameter do
       "ROW('Elixir','Ecto',DECODE('mQ==','BASE64'))"
   """
 
-  @doc """
-  Converts term to a valid SQL expression.
-  """
+  @fallback_to_any true
+  @doc "Converts term to a valid SQL expression."
   @spec to_expression(any()) :: String.t()
   def to_expression(term)
 
-  @doc """
-  Converts term to a string literal.
-  """
+  @fallback_to_any true
+  @doc "Converts term to a string literal."
   @spec to_string_literal(any()) :: String.t() | nil
   def to_string_literal(term)
 end
@@ -186,8 +184,8 @@ defimpl EctoLogbook.PrintableParameter, for: BitString do
 
   def to_string_literal(binary) do
     cond do
-      Ecto.UUID.load(binary) != :error -> Ecto.UUID.load!(binary)
       String.valid?(binary) -> binary
+      Ecto.UUID.load(binary) != :error -> Ecto.UUID.load!(binary)
       true -> nil
     end
   end
@@ -316,4 +314,9 @@ if Code.ensure_loaded?(Postgrex.Lexeme) do
       end
     end
   end
+end
+
+defimpl EctoLogbook.PrintableParameter, for: Any do
+  def to_expression(any), do: inspect(any)
+  def to_string_literal(any), do: inspect(any)
 end
