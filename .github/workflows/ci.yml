@@ -20,6 +20,6 @@ jobs:
       - run: mix deps.get
       - run: mix deps.compile --only test
       - run: mix format --check-formatted --dry-run
-      # - run: mix credo --strict"
+      - run: mix credo --strict"
       - run: mix dialyzer
       - run: mix test

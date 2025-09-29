@@ -29,10 +29,12 @@ defmodule EctoLogbookTest.PrintableParameterTest do
       assert to_expression("string with single quote: '") == ~s|'string with single quote: '''|
       assert to_expression("string with double quote: \"") == ~s|'string with double quote: "'|
       assert to_expression(<<95, 131, 49, 101, 176, 212>>) == "DECODE('X4MxZbDU','BASE64')"
-      uuid = <<79, 208, 231, 171, 38, 209, 76, 228, 170, 26, 41, 3, 45, 16, 79, 73>>
-      assert to_expression(uuid) == "'4fd0e7ab-26d1-4ce4-aa1a-29032d104f49'"
-      ulid = <<1, 150, 166, 102, 15, 218, 236, 148, 23, 193, 20, 233, 118, 145, 114, 127>>
-      assert to_expression(ulid) == "'0196a666-0fda-ec94-17c1-14e97691727f'"
+      string_uuid = "c78073b9-7bd3-4465-88e4-dc647aa1d025"
+      assert to_expression(string_uuid) == ~s|'c78073b9-7bd3-4465-88e4-dc647aa1d025'|
+      binary_uuid = <<79, 208, 231, 171, 38, 209, 76, 228, 170, 26, 41, 3, 45, 16, 79, 73>>
+      assert to_expression(binary_uuid) == "'4fd0e7ab-26d1-4ce4-aa1a-29032d104f49'"
+      binary_ulid = <<1, 150, 166, 102, 15, 218, 236, 148, 23, 193, 20, 233, 118, 145, 114, 127>>
+      assert to_expression(binary_ulid) == "'0196a666-0fda-ec94-17c1-14e97691727f'"
     end
 
     test "Datetimes" do

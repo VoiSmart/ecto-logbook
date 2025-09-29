@@ -1,6 +1,6 @@
 defmodule EctoLogbook.MixProject do
   use Mix.Project
-  @version "1.14.3"
+  @version "1.14.4"
   @source_url "https://github.com/VoiSmart/ecto-logbook"
 
   def project do
