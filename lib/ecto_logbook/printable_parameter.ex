@@ -25,11 +25,11 @@ defprotocol EctoLogbook.PrintableParameter do
   """
 
   @fallback_to_any true
+
   @doc "Converts term to a valid SQL expression."
   @spec to_expression(any()) :: String.t()
   def to_expression(term)
 
-  @fallback_to_any true
   @doc "Converts term to a string literal."
   @spec to_string_literal(any()) :: String.t() | nil
   def to_string_literal(term)
